@@ -1,0 +1,19 @@
+{
+    "explorer.fileNesting.enabled": true,
+	"explorer.fileNesting.expand": true,
+	"explorer.fileNesting.patterns": {
+		"Cargo.toml": "Cargo.lock,build.rs",
+		"README.md": "CONTRIBUTING.md,LICENSE,.gitignore,SECURITY.md",
+	},
+	"editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "[rust]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    "cSpell.words": [
+        "Hako"
+    ],
+}

@@ -1,0 +1,32 @@
+[package]
+name = "hako"
+description = "A simple Minecraft Launcher"
+version = "0.0.1"
+authors = ["bilirumble <bilirumble@outlook.com>"]
+readme = "README.md"
+homepage = "https://github.com/bilirumble/hako"
+repository = "https://github.com/bilirumble/hako"
+keywords = ["minecraft", "launcher"]
+license = "MIT"
+edition = "2024"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = true
+
+[dependencies]
+chrono = "0.4.41"
+env_logger = "0.11.8"
+iced = { version = "0.13.1", default-features = false, features = [
+    "auto-detect-theme",
+    "tiny-skia",
+] }
+log = "0.4.28"
+
+[build-dependencies]
+winres = "0.1.12"
