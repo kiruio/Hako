@@ -1,7 +1,7 @@
 [package]
 name = "hako"
 description = "A simple Minecraft Launcher"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["bilirumble <bilirumble@outlook.com>"]
 readme = "README.md"
 homepage = "https://github.com/bilirumble/hako"
@@ -22,9 +22,10 @@ strip = true
 [dependencies]
 chrono = "0.4.41"
 env_logger = "0.11.8"
-iced = { version = "0.13.1", default-features = false, features = [
-    "auto-detect-theme",
+iced = { git = "https://github.com/iced-rs/iced", branch = "master", default-features = false, features = [
     "tiny-skia",
+    "thread-pool",
+    "crisp",
 ] }
 log = "0.4.28"
 
