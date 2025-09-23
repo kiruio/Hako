@@ -2,7 +2,7 @@
 
 use iced::{Size, window};
 
-use crate::ui::root::Application;
+use crate::ui::Application;
 
 mod core;
 mod crash_handler;
