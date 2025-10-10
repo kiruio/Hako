@@ -2,7 +2,7 @@ use iced::mouse::Interaction;
 use iced::widget::{Space, column, container, mouse_area, row};
 use iced::window::Direction;
 use iced::{Background, border};
-use iced::{Element, Length, Theme};
+use iced::{Element, Length, Task, Theme};
 
 #[derive(Debug)]
 pub struct WindowFrame;
@@ -62,5 +62,12 @@ impl WindowFrame {
             ],
         ]
         .into()
+    }
+
+    pub fn command(direction: Direction) -> Task<crate::ui::Message> {
+        use iced::window;
+        window::latest()
+            .and_then(move |id| window::drag_resize(id, direction))
+            .map(move |_: Option<()>| crate::ui::Message::Resize(direction))
     }
 }
