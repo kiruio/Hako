@@ -1,5 +1,6 @@
 use iced::widget::{button, mouse_area, row, text};
-use iced::{Element, Length, Padding};
+use iced::window;
+use iced::{Element, Length, Padding, Task};
 
 #[derive(Clone, Debug)]
 pub enum NavbarMessage {
@@ -27,5 +28,20 @@ impl Navbar {
         .height(50);
 
         mouse_area(bar).on_press(NavbarMessage::DragWindow).into()
+    }
+
+    pub fn command(msg: NavbarMessage) -> Task<crate::ui::Message> {
+        use crate::ui::Message;
+        match msg {
+            NavbarMessage::DragWindow => window::latest()
+                .and_then(window::drag)
+                .map(|_: Option<()>| Message::Navbar(NavbarMessage::DragWindow)),
+            NavbarMessage::Minimize => window::latest()
+                .and_then(|id| window::minimize(id, true))
+                .map(|_: Option<()>| Message::Navbar(NavbarMessage::Minimize)),
+            NavbarMessage::Close => window::latest()
+                .and_then(window::close)
+                .map(|_: Option<()>| Message::Navbar(NavbarMessage::Close)),
+        }
     }
 }

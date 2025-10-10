@@ -1,7 +1,7 @@
 [package]
 name = "hako"
 description = "A simple Minecraft Launcher"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["bilirumble <bilirumble@outlook.com>"]
 homepage = "https://github.com/bilirumble/hako"
 keywords = ["minecraft", "launcher"]

@@ -1,3 +1,4 @@
+pub mod config;
 pub mod views;
 pub mod widgets;
 
@@ -21,28 +22,11 @@ impl Application {
         (Self::default(), Task::none())
     }
 
-    // TODO: 重构，update不应该全部在这里处理
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Resize(direction) => {
-                window::latest().and_then(move |id| window::drag_resize(id, direction))
-            }
-
-            Message::Home(home_msg) => {
-                let _ = self.home.update(home_msg);
-                Task::none()
-            }
-
-            Message::Navbar(nav) => {
-                use widgets::navbar::NavbarMessage;
-                match nav {
-                    NavbarMessage::DragWindow => window::latest().and_then(window::drag),
-                    NavbarMessage::Minimize => {
-                        window::latest().and_then(|id| window::minimize(id, true))
-                    }
-                    NavbarMessage::Close => window::latest().and_then(window::close),
-                }
-            }
+            Message::Resize(direction) => widgets::window_frame::WindowFrame::command(direction),
+            Message::Home(msg) => self.home.update(msg).map(Message::Home),
+            Message::Navbar(msg) => widgets::navbar::Navbar::command(msg),
         }
     }
 
