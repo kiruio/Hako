@@ -1,7 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use iced::{Size, window};
-
 use crate::ui::Application;
 
 mod core;
@@ -12,15 +10,11 @@ fn main() {
     crash_handler::hook();
     env_logger::init();
 
+    let cfg = ui::config::AppConfig::load();
+
     iced::application(Application::new, Application::update, Application::view)
-        .title("Hako")
-        .window(window::Settings {
-            size: Size::new(1050., 590.),
-            min_size: Some(Size::new(1050., 590.)),
-            decorations: false,
-            transparent: true,
-            ..Default::default()
-        })
+        .title(cfg.title)
+        .window(cfg.window)
         .style(Application::style)
         .run()
         .expect("Could not run application");
