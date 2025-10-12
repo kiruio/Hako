@@ -2,14 +2,14 @@ use iced::widget::{button, column, row, text, text_input};
 use iced::{Element, Length};
 
 #[derive(Default, Debug, Clone)]
-pub struct Home {
-    pub sub: HomeSub,
+pub struct State {
+    pub sub: Sub,
     pub stack: Vec<Page>,
     pub content: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub enum HomeSub {
+pub enum Sub {
     #[default]
     List,
     Stats,
@@ -21,64 +21,59 @@ pub enum Page {
 }
 
 #[derive(Clone, Debug)]
-pub enum HomeMessage {
-    SwitchSub(HomeSub),
+pub enum Message {
+    SwitchSub(Sub),
     PushDetail(String),
     Pop,
     ContentChanged(String),
 }
 
-impl Home {
-    pub fn update(&mut self, message: HomeMessage) {
-        match message {
-            HomeMessage::SwitchSub(s) => self.sub = s,
-            HomeMessage::PushDetail(t) => self.stack.push(Page::Detail(t)),
-            HomeMessage::Pop => {
-                self.stack.pop();
-            }
-            HomeMessage::ContentChanged(c) => self.content = c,
+pub fn update(state: &mut State, message: Message) {
+    match message {
+        Message::SwitchSub(s) => state.sub = s,
+        Message::PushDetail(t) => state.stack.push(Page::Detail(t)),
+        Message::Pop => {
+            state.stack.pop();
         }
+        Message::ContentChanged(c) => state.content = c,
     }
+}
 
-    pub fn view(&self) -> Element<'_, HomeMessage> {
-        let side = column![
-            button("List").on_press(HomeMessage::SwitchSub(HomeSub::List)),
-            button("Stats").on_press(HomeMessage::SwitchSub(HomeSub::Stats)),
-        ];
+pub fn view(state: &State) -> Element<'_, Message> {
+    let side = column![
+        button("List").on_press(Message::SwitchSub(Sub::List)),
+        button("Stats").on_press(Message::SwitchSub(Sub::Stats)),
+    ];
 
-        let main: iced::Element<'_, HomeMessage> = if let Some(top) = self.stack.last() {
-            match top {
-                Page::Detail(t) => iced::widget::Column::new()
-                    .push(text(format!("Detail: {} (depth {})", t, self.stack.len())))
-                    .push(
-                        button("Open Next")
-                            .on_press(HomeMessage::PushDetail(format!("{}-next", t))),
-                    )
-                    .push(button("Back").on_press(HomeMessage::Pop))
-                    .into(),
-            }
-        } else {
-            match self.sub {
-                HomeSub::List => column![
-                    text("Stack test..."),
-                    row![
-                        button("Open A").on_press(HomeMessage::PushDetail("A".into())),
-                        button("Open B").on_press(HomeMessage::PushDetail("B".into())),
-                        button("Open C").on_press(HomeMessage::PushDetail("C".into())),
-                    ],
-                    text_input("Type...", &self.content)
-                        .on_input(HomeMessage::ContentChanged)
-                        .size(16)
-                ]
+    let main: iced::Element<'_, Message> = if let Some(top) = state.stack.last() {
+        match top {
+            Page::Detail(t) => iced::widget::Column::new()
+                .push(text(format!("Detail: {} (depth {})", t, state.stack.len())))
+                .push(button("Open Next").on_press(Message::PushDetail(format!("{}-next", t))))
+                .push(button("Back").on_press(Message::Pop))
                 .into(),
-                HomeSub::Stats => column![text("Stats View")].into(),
-            }
-        };
-
-        if self.stack.is_empty() {
-            row![side, main].spacing(16).height(Length::Fill).into()
-        } else {
-            row![main].height(Length::Fill).into()
         }
+    } else {
+        match state.sub {
+            Sub::List => column![
+                text("Stack test..."),
+                row![
+                    button("Open A").on_press(Message::PushDetail("A".into())),
+                    button("Open B").on_press(Message::PushDetail("B".into())),
+                    button("Open C").on_press(Message::PushDetail("C".into())),
+                ],
+                text_input("Type...", &state.content)
+                    .on_input(Message::ContentChanged)
+                    .size(16),
+            ]
+            .into(),
+            Sub::Stats => column![text("Stats View")].into(),
+        }
+    };
+
+    if state.stack.is_empty() {
+        row![side, main].spacing(16).height(Length::Fill).into()
+    } else {
+        row![main].height(Length::Fill).into()
     }
 }
