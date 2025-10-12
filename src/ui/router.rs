@@ -1,4 +1,7 @@
-use crate::ui::views::home::{Home, HomeMessage};
+use crate::ui::views::{
+    home::{self, Message as HomeMessage, State as HomeState},
+    settings,
+};
 use iced::Element;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -23,7 +26,8 @@ pub struct NavbarState {
 #[derive(Debug, Default)]
 pub struct Router {
     pub top: TopTab,
-    pub home: Home,
+    pub home: HomeState,
+    pub settings: settings::State,
 }
 
 impl Router {
@@ -34,14 +38,14 @@ impl Router {
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::SwitchTop(t) => self.top = t,
-            Message::Home(m) => self.home.update(m),
+            Message::Home(m) => home::update(&mut self.home, m),
         }
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, Message> {
         match self.top {
-            TopTab::Home => self.home.view().map(Message::Home),
-            TopTab::Settings => crate::ui::views::settings::Settings::view(),
+            TopTab::Home => home::view(&self.home).map(Message::Home),
+            TopTab::Settings => settings::view(&self.settings),
         }
     }
 
