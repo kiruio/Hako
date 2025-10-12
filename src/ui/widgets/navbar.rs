@@ -18,7 +18,7 @@ impl Navbar {
         let header: iced::Element<'_, crate::ui::Message> = if state.stack_active {
             row![
                 button("<").on_press(crate::ui::Message::Router(
-                    crate::ui::router::Message::Home(crate::ui::views::home::HomeMessage::Pop),
+                    crate::ui::router::Message::Home(crate::ui::views::home::Message::Pop),
                 )),
                 text(title),
             ]
