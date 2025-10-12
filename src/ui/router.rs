@@ -1,0 +1,59 @@
+use crate::ui::views::home::{Home, HomeMessage};
+use iced::Element;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum TopTab {
+    #[default]
+    Home,
+    Settings,
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    SwitchTop(TopTab),
+    Home(HomeMessage),
+}
+
+#[derive(Debug, Clone)]
+pub struct NavbarState {
+    pub stack_active: bool,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Router {
+    pub top: TopTab,
+    pub home: Home,
+}
+
+impl Router {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn update(&mut self, msg: Message) {
+        match msg {
+            Message::SwitchTop(t) => self.top = t,
+            Message::Home(m) => self.home.update(m),
+        }
+    }
+
+    pub fn view<'a>(&'a self) -> Element<'a, Message> {
+        match self.top {
+            TopTab::Home => self.home.view().map(Message::Home),
+            TopTab::Settings => crate::ui::views::settings::Settings::view(),
+        }
+    }
+
+    pub fn navbar_state(&self) -> NavbarState {
+        let stack_active = !self.home.stack.is_empty();
+        let title = self.home.stack.last().map(|p| match p {
+            crate::ui::views::home::Page::Detail(t) => t.clone(),
+        });
+
+        NavbarState {
+            stack_active,
+            title,
+        }
+    }
+}

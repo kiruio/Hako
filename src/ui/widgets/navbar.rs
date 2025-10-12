@@ -12,22 +12,54 @@ pub enum NavbarMessage {
 pub struct Navbar;
 
 impl Navbar {
-    pub fn view() -> Element<'static, NavbarMessage> {
-        let bar = row![
-            text("Hako").size(24),
-            iced::widget::Space::with_width(Length::Fill),
-            row![button("启动"), button("下载"), button("设置"),].height(40),
-            iced::widget::Space::with_width(Length::Fill),
-            row![
-                button("_").on_press(NavbarMessage::Minimize),
-                button("×").on_press(NavbarMessage::Close),
-            ]
-        ]
-        .align_y(iced::Alignment::Center)
-        .padding(Padding::from([5, 12]))
-        .height(50);
+    pub fn view(state: crate::ui::router::NavbarState) -> Element<'static, crate::ui::Message> {
+        let title = state.title.clone().unwrap_or_default();
 
-        mouse_area(bar).on_press(NavbarMessage::DragWindow).into()
+        let header: iced::Element<'_, crate::ui::Message> = if state.stack_active {
+            row![
+                button("<").on_press(crate::ui::Message::Router(
+                    crate::ui::router::Message::Home(crate::ui::views::home::HomeMessage::Pop),
+                )),
+                text(title),
+            ]
+            .into()
+        } else {
+            text("Hako").size(24).into()
+        };
+
+        let navigation: iced::Element<'_, crate::ui::Message> = if state.stack_active {
+            iced::widget::Space::with_width(Length::Fill).into()
+        } else {
+            row![
+                button("Home").on_press(crate::ui::Message::Router(
+                    crate::ui::router::Message::SwitchTop(crate::ui::router::TopTab::Home),
+                )),
+                button("Settings").on_press(crate::ui::Message::Router(
+                    crate::ui::router::Message::SwitchTop(crate::ui::router::TopTab::Settings),
+                )),
+            ]
+            .into()
+        };
+
+        let controls = row![
+            button("_").on_press(crate::ui::Message::Navbar(NavbarMessage::Minimize)),
+            button("×").on_press(crate::ui::Message::Navbar(NavbarMessage::Close)),
+        ];
+
+        mouse_area(
+            row![
+                header,
+                iced::widget::Space::with_width(Length::Fill),
+                navigation,
+                iced::widget::Space::with_width(Length::Fill),
+                controls
+            ]
+            .align_y(iced::Alignment::Center)
+            .padding(Padding::from([5, 12]))
+            .height(50),
+        )
+        .on_press(crate::ui::Message::Navbar(NavbarMessage::DragWindow))
+        .into()
     }
 
     pub fn command(msg: NavbarMessage) -> Task<crate::ui::Message> {
