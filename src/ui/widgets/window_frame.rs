@@ -42,7 +42,9 @@ impl WindowFrame {
                 handle(Direction::West),
                 container(content)
                     .style(|theme: &Theme| container::Style {
-                        background: Some(Background::Color(theme.palette().background)),
+                        background: Some(Background::Color(
+                            theme.extended_palette().background.base.color
+                        )),
                         border: border::Border {
                             width: 0.0,
                             radius: 8.0.into(),
