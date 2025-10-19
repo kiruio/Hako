@@ -2,8 +2,8 @@
 name = "hako"
 description = "A simple Minecraft Launcher"
 version = "0.0.4"
-authors = ["bilirumble <bilirumble@outlook.com>"]
-homepage = "https://github.com/bilirumble/hako"
+authors = ["yamrc <yamrci@outlook.com>"]
+homepage = "https://github.com/kiruio/hako"
 keywords = ["minecraft", "launcher"]
 license = "MIT"
 edition = "2024"
