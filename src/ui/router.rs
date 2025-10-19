@@ -15,6 +15,7 @@ pub enum TopTab {
 pub enum Message {
     SwitchTop(TopTab),
     Home(HomeMessage),
+    Settings(settings::Message),
 }
 
 #[derive(Debug, Clone)]
@@ -39,13 +40,14 @@ impl Router {
         match msg {
             Message::SwitchTop(t) => self.top = t,
             Message::Home(m) => home::update(&mut self.home, m),
+            Message::Settings(m) => self.settings.update(&m),
         }
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, Message> {
         match self.top {
             TopTab::Home => home::view(&self.home).map(Message::Home),
-            TopTab::Settings => settings::view(&self.settings),
+            TopTab::Settings => settings::view(&self.settings).map(Message::Settings),
         }
     }
 

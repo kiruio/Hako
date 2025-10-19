@@ -13,6 +13,8 @@ fn main() {
     let cfg = ui::config::AppConfig::load();
 
     iced::application(Application::new, Application::update, Application::view)
+        .theme(|app: &crate::ui::Application| app.theme())
+        .subscription(Application::subscription)
         .title(cfg.title)
         .window(cfg.window)
         .style(Application::style)
