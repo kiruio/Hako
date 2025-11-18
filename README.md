@@ -3,7 +3,8 @@
   <br />
   <h1>Hako</h1>
 
-[![wakatime](https://wakatime.com/badge/github/kiruio/Hako.svg)](https://wakatime.com/badge/github/kiruio/Hako)[![License](https://img.shields.io/github/license/kiruio/Hako?color=blue)](https://github.com/kiruio/Hako/blob/master/LICENSE)<br/>
+[![wakatime](https://wakatime.com/badge/github/kiruio/Hako.svg)](https://wakatime.com/badge/github/kiruio/Hako)[![License](https://img.shields.io/github/license/kiruio/Hako?color=blue)](https://github.com/kiruio/Hako/blob/master/LICENSE)[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fkiruio%2FHako.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fkiruio%2FHako?ref=badge_shield)
+<br/>
 **开源第三方 Minecraft 启动器**
 
 </div>
@@ -25,3 +26,7 @@
 ## 📜 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fkiruio%2FHako.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fkiruio%2FHako?ref=badge_large)
