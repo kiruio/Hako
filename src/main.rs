@@ -1,4 +1,8 @@
+use anyhow::Result;
 use gpui::{Application, Context, Window, WindowOptions, div, prelude::*, px};
+use utils::logger;
+
+mod utils;
 
 struct Scrollable {}
 
@@ -41,7 +45,10 @@ impl Render for Scrollable {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
+    logger::init();
+    tracing::info!("Hako starting...");
+
     Application::new().run(|ctx| {
         let _ = ctx.open_window(
             WindowOptions {
@@ -49,6 +56,7 @@ fn main() {
             },
             |_, c| c.new(|_| Scrollable {}),
         );
-        println!("ok?");
     });
+
+    Ok(())
 }

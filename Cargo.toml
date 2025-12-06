@@ -3,5 +3,18 @@ name = "Hako"
 version = "0.0.0"
 edition = "2024"
 
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = true
+
 [dependencies]
+anyhow = "1.0.100"
 gpui = "0.2.2"
+thiserror = "2.0.17"
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
