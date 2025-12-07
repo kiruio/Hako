@@ -17,17 +17,15 @@ pub struct GameConfig {
 
 impl GameConfig {
 	pub fn merge(&mut self, other: &Self) {
-		if other.ram_type.is_some() {
-			self.ram_type = other.ram_type;
-		}
-		if other.ram_custom.is_some() {
-			self.ram_custom = other.ram_custom;
-		}
-		if other.jvm_args.is_some() {
-			self.jvm_args = other.jvm_args.clone();
-		}
-		if other.game_args.is_some() {
-			self.game_args = other.game_args.clone();
-		}
+		other.ram_type.map(|v| self.ram_type = Some(v));
+		other.ram_custom.map(|v| self.ram_custom = Some(v));
+		other
+			.jvm_args
+			.as_ref()
+			.map(|v| self.jvm_args = Some(v.clone()));
+		other
+			.game_args
+			.as_ref()
+			.map(|v| self.game_args = Some(v.clone()));
 	}
 }
