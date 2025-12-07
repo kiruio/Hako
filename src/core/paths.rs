@@ -8,14 +8,11 @@ pub fn config_dir() -> Result<PathBuf> {
 }
 
 pub fn cache_dir() -> Result<PathBuf> {
-	std::env::temp_dir()
-		.join("hako_cache")
-		.canonicalize()
-		.or_else(|_| {
-			std::fs::create_dir_all(std::env::temp_dir().join("hako_cache"))
-				.context("Failed to create cache directory")?;
-			Ok(std::env::temp_dir().join("hako_cache"))
-		})
+	let cache = std::env::temp_dir().join("hako_cache");
+	if !cache.exists() {
+		std::fs::create_dir_all(&cache).context("Failed to create cache directory")?;
+	}
+	Ok(cache)
 }
 
 pub fn default_minecraft_dir() -> Option<PathBuf> {

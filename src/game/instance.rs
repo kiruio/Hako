@@ -41,7 +41,7 @@ impl InstanceScanner {
 				if json_path.exists() {
 					instances.push(GameInstance {
 						cluster_path: cluster_path.to_path_buf(),
-						version: version.clone(),
+						version,
 						version_path: path,
 					});
 				}

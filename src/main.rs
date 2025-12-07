@@ -3,17 +3,19 @@ use anyhow::Result;
 use gpui::{AppContext, Application, WindowOptions};
 
 mod config;
+mod core;
 mod game;
-mod platform;
-mod storage;
+mod task;
 mod ui;
-mod utils;
 
-use utils::logger;
+use core::logger;
 
 fn main() -> Result<()> {
 	logger::init();
 	tracing::info!("Hako starting...");
+
+	let rt = tokio::runtime::Runtime::new()?;
+	let _guard = rt.enter();
 
 	Application::new().run(|ctx| {
 		let _ = ctx.open_window(

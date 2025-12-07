@@ -29,15 +29,12 @@ pub struct GameDefaults {
 
 impl GameDefaults {
 	pub fn merge(&mut self, other: &Self) {
-		if other.ram_type.is_some() {
-			self.ram_type = other.ram_type;
-		}
-		if other.ram_custom.is_some() {
-			self.ram_custom = other.ram_custom;
-		}
-		if other.jvm_args.is_some() {
-			self.jvm_args = other.jvm_args.clone();
-		}
+		other.ram_type.map(|v| self.ram_type = Some(v));
+		other.ram_custom.map(|v| self.ram_custom = Some(v));
+		other
+			.jvm_args
+			.as_ref()
+			.map(|v| self.jvm_args = Some(v.clone()));
 	}
 }
 
@@ -56,20 +53,11 @@ impl LauncherConfig {
 	}
 
 	pub fn merge(&mut self, other: &Self) {
-		if other.theme.is_some() {
-			self.theme = other.theme.clone();
-		}
-		if other.window_width.is_some() {
-			self.window_width = other.window_width;
-		}
-		if other.window_height.is_some() {
-			self.window_height = other.window_height;
-		}
-
-		if let Some(game) = &other.game {
-			self.game
-				.get_or_insert_with(GameDefaults::default)
-				.merge(game);
-		}
+		other.theme.as_ref().map(|v| self.theme = Some(v.clone()));
+		other.window_width.map(|v| self.window_width = Some(v));
+		other.window_height.map(|v| self.window_height = Some(v));
+		other.game.as_ref().map(|g| {
+			self.game.get_or_insert_with(GameDefaults::default).merge(g);
+		});
 	}
 }
