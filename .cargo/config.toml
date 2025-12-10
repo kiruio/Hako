@@ -1,0 +1,4 @@
+[build]
+# win特色1m小栈，编译时必然溢出
+rustflags = ["-C", "link-arg=/STACK:8388608"]
+
