@@ -2,9 +2,11 @@ use crate::ui::app::HakoApp;
 use anyhow::Result;
 use gpui::{AppContext, Application, WindowOptions};
 
+mod account;
 mod config;
 mod core;
 mod game;
+mod net;
 mod task;
 mod ui;
 
@@ -12,8 +14,6 @@ use core::logger;
 
 fn main() -> Result<()> {
 	logger::init();
-	tracing::info!("Hako starting...");
-
 	let rt = tokio::runtime::Runtime::new()?;
 	let _guard = rt.enter();
 
