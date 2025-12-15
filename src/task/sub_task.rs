@@ -75,7 +75,7 @@ impl SubTaskChain {
 					Err(e) => {
 						last_error = Some(e);
 						if attempt < policy.max_retries {
-							tokio::time::sleep(tokio::time::Duration::from_millis(
+							tokio::time::sleep(std::time::Duration::from_millis(
 								policy.retry_delay_ms,
 							))
 							.await;

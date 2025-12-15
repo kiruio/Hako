@@ -1,7 +1,7 @@
 use crate::task::error::TaskError;
 use crate::task::priority::Priority;
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 use uuid::Uuid;
 
 pub type TaskId = Uuid;
@@ -20,6 +20,7 @@ pub struct TaskHandle<T> {
 	pub priority: Priority,
 	state: Arc<tokio::sync::RwLock<TaskState>>,
 	cancel_tx: Arc<tokio::sync::watch::Sender<bool>>,
+	completion: Arc<Notify>,
 	result_rx: oneshot::Receiver<Result<T, TaskError>>,
 }
 
@@ -29,6 +30,7 @@ impl<T> TaskHandle<T> {
 		priority: Priority,
 		state: Arc<tokio::sync::RwLock<TaskState>>,
 		cancel_tx: Arc<tokio::sync::watch::Sender<bool>>,
+		completion: Arc<Notify>,
 		result_rx: oneshot::Receiver<Result<T, TaskError>>,
 	) -> Self {
 		Self {
@@ -36,8 +38,17 @@ impl<T> TaskHandle<T> {
 			priority,
 			state,
 			cancel_tx,
+			completion,
 			result_rx,
 		}
+	}
+
+	pub fn cancel_token(&self) -> Arc<tokio::sync::watch::Sender<bool>> {
+		self.cancel_tx.clone()
+	}
+
+	pub fn completion_notifier(&self) -> Arc<Notify> {
+		self.completion.clone()
 	}
 
 	pub async fn state(&self) -> TaskState {

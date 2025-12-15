@@ -110,7 +110,7 @@ async fn run_start(ctx: &TaskContext, task: &StartGameTask) -> Result<()> {
 	let mut child = cmd.spawn().context("Failed to start game process")?;
 	tracing::info!("game process spawned, waiting for game to initialize");
 
-	let mut cancelled = ctx.cancelled.clone();
+	let mut cancelled = ctx.cancelled_receiver();
 	let start_time = std::time::Instant::now();
 	const MAX_WAIT_TIME: std::time::Duration = std::time::Duration::from_secs(30);
 

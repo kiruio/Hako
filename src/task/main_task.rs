@@ -37,7 +37,7 @@ pub trait ConcurrentTask: TaskType + Send + Sync {
 }
 
 pub struct TaskContext {
-	pub cancelled: tokio::sync::watch::Receiver<bool>,
+	cancelled: tokio::sync::watch::Receiver<bool>,
 }
 
 impl TaskContext {
@@ -47,5 +47,13 @@ impl TaskContext {
 
 	pub fn is_cancelled(&self) -> bool {
 		*self.cancelled.borrow()
+	}
+
+	pub async fn cancelled(&mut self) {
+		let _ = self.cancelled.changed().await;
+	}
+
+	pub fn cancelled_receiver(&self) -> tokio::sync::watch::Receiver<bool> {
+		self.cancelled.clone()
 	}
 }

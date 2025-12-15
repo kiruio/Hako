@@ -6,7 +6,7 @@ use crate::task::main_task::{BlockingTask, ConcurrentTask};
 use crate::task::priority::Priority;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Notify, watch};
 
 pub struct TaskManager {
 	blocking_executor: Arc<BlockingExecutor>,
@@ -17,6 +17,9 @@ pub struct TaskManager {
 
 struct TaskInfo {
 	priority: Priority,
+	task_type: Option<String>,
+	cancel_tx: Arc<watch::Sender<bool>>,
+	completion: Arc<Notify>,
 }
 
 impl TaskManager {
@@ -36,8 +39,7 @@ impl TaskManager {
 		priority: Priority,
 	) -> TaskResult<TaskHandle<T::Output>> {
 		let handle = self.blocking_executor.submit(task, priority).await?;
-		let mut tasks = self.tasks.write().await;
-		tasks.insert(handle.id, TaskInfo { priority });
+		self.track_task(&handle, Some(T::TYPE_NAME.to_string())).await;
 		Ok(handle)
 	}
 
@@ -47,22 +49,40 @@ impl TaskManager {
 		priority: Priority,
 	) -> TaskResult<TaskHandle<T::Output>> {
 		let handle = self.concurrent_executor.submit(task, priority).await?;
-		let mut tasks = self.tasks.write().await;
-		tasks.insert(handle.id, TaskInfo { priority });
+		self.track_task(&handle, None).await;
 		Ok(handle)
 	}
 
 	pub async fn cancel(&self, task_id: TaskId) -> TaskResult<()> {
 		let tasks = self.tasks.read().await;
-		if tasks.contains_key(&task_id) {
-			drop(tasks);
-			Ok(())
-		} else {
-			Err(TaskError::InvalidState)
-		}
+		let Some(info) = tasks.get(&task_id) else {
+			return Err(TaskError::InvalidState);
+		};
+		info.cancel_tx
+			.send(true)
+			.map_err(|_| TaskError::InvalidState)
 	}
 
 	pub async fn boost_priority(&self, task_id: TaskId, priority: Priority) -> TaskResult<()> {
+		let task_type = {
+			let tasks = self.tasks.read().await;
+			tasks.get(&task_id).and_then(|info| info.task_type.clone())
+		};
+
+		if let Some(task_type) = &task_type {
+			if self
+				.blocking_executor
+				.boost_priority(task_type, task_id, priority)
+				.await
+			{
+				let mut tasks = self.tasks.write().await;
+				if let Some(info) = tasks.get_mut(&task_id) {
+					info.priority = priority;
+				}
+				return Ok(());
+			}
+		}
+
 		let mut tasks = self.tasks.write().await;
 		if let Some(info) = tasks.get_mut(&task_id) {
 			info.priority = priority;
@@ -70,6 +90,26 @@ impl TaskManager {
 		} else {
 			Err(TaskError::InvalidState)
 		}
+	}
+
+	async fn track_task<T>(&self, handle: &TaskHandle<T>, task_type: Option<String>) {
+		let mut tasks = self.tasks.write().await;
+		let task_id = handle.id;
+		let info = TaskInfo {
+			priority: handle.priority,
+			task_type,
+			cancel_tx: handle.cancel_token(),
+			completion: handle.completion_notifier(),
+		};
+		tasks.insert(task_id, info);
+
+		let tasks_clone = self.tasks.clone();
+		let completion = handle.completion_notifier();
+		tokio::spawn(async move {
+			completion.notified().await;
+			let mut tasks = tasks_clone.write().await;
+			tasks.remove(&task_id);
+		});
 	}
 }
 

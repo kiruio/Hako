@@ -31,13 +31,6 @@ impl LockKey {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LockGranularity {
-	Global,
-	Instance(String),
-	Resource(String),
-}
-
 pub struct LockManager {
 	locks: Arc<RwLock<HashSet<LockKey>>>,
 }
@@ -53,13 +46,9 @@ impl LockManager {
 		let mut locks = self.locks.write().await;
 
 		for key in keys {
-			if locks.contains(key) {
+			if !locks.insert(key.clone()) {
 				return Err(format!("Lock conflict: {:?}", key));
 			}
-		}
-
-		for key in keys {
-			locks.insert(key.clone());
 		}
 
 		Ok(())
@@ -70,10 +59,6 @@ impl LockManager {
 		for key in keys {
 			locks.remove(key);
 		}
-	}
-
-	pub async fn has_lock(&self, key: &LockKey) -> bool {
-		self.locks.read().await.contains(key)
 	}
 }
 
