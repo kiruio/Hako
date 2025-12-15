@@ -6,7 +6,7 @@ use crate::task::main_task::{BlockingTask, ConcurrentTask};
 use crate::task::priority::Priority;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Notify, watch};
+use tokio::sync::{Notify, RwLock, watch};
 
 pub struct TaskManager {
 	blocking_executor: Arc<BlockingExecutor>,
@@ -39,7 +39,8 @@ impl TaskManager {
 		priority: Priority,
 	) -> TaskResult<TaskHandle<T::Output>> {
 		let handle = self.blocking_executor.submit(task, priority).await?;
-		self.track_task(&handle, Some(T::TYPE_NAME.to_string())).await;
+		self.track_task(&handle, Some(T::TYPE_NAME.to_string()))
+			.await;
 		Ok(handle)
 	}
 
