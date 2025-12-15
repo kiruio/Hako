@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct VersionProfile {
 	#[serde(default, rename = "inheritsFrom")]
 	pub inherits_from: Option<String>,
@@ -18,9 +18,13 @@ pub struct VersionProfile {
 	pub libraries: Vec<Library>,
 	#[serde(default)]
 	pub assets: Option<String>,
+	#[serde(default, rename = "assetIndex")]
+	pub asset_index: Option<AssetIndexInfo>,
+	#[serde(default)]
+	pub downloads: Option<VersionDownloads>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct Arguments {
 	#[serde(default)]
 	pub game: Vec<ArgumentValue>,
@@ -114,6 +118,36 @@ pub struct Artifact {
 	pub size: Option<u64>,
 }
 
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct AssetIndexInfo {
+	#[serde(default)]
+	pub id: Option<String>,
+	#[serde(default)]
+	pub sha1: Option<String>,
+	#[serde(default)]
+	pub size: Option<u64>,
+	#[serde(default, rename = "totalSize")]
+	pub total_size: Option<u64>,
+	#[serde(default)]
+	pub url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct VersionDownloads {
+	#[serde(default)]
+	pub client: Option<DownloadEntry>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct DownloadEntry {
+	#[serde(default)]
+	pub sha1: Option<String>,
+	#[serde(default)]
+	pub size: Option<u64>,
+	#[serde(default)]
+	pub url: Option<String>,
+}
+
 pub fn load_version_profile(game_dir: &Path, version: &str) -> Result<VersionProfile> {
 	let path = game_dir
 		.join("versions")
@@ -150,6 +184,12 @@ pub fn merge_profile(mut base: VersionProfile, child: VersionProfile) -> Version
 	base.libraries.extend(child.libraries);
 	if let Some(assets) = child.assets {
 		base.assets = Some(assets);
+	}
+	if child.asset_index.is_some() {
+		base.asset_index = child.asset_index;
+	}
+	if child.downloads.is_some() {
+		base.downloads = child.downloads;
 	}
 	base
 }
