@@ -8,8 +8,11 @@ use crate::game::profile::load_version_profile;
 use crate::task::error::{TaskError, TaskResult};
 use crate::task::lock::LockKey;
 use crate::task::main_task::{BlockingTask, TaskContext, TaskType};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+const MAX_WAIT_TIME: Duration = Duration::from_secs(30);
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 
@@ -111,8 +114,7 @@ async fn run_start(ctx: &TaskContext, task: &StartGameTask) -> Result<()> {
 	tracing::info!("game process spawned, waiting for game to initialize");
 
 	let mut cancelled = ctx.cancelled_receiver();
-	let start_time = std::time::Instant::now();
-	const MAX_WAIT_TIME: std::time::Duration = std::time::Duration::from_secs(30);
+	let start_time = Instant::now();
 
 	let stdout = child.stdout.take().context("Failed to get stdout")?;
 	let stderr = child.stderr.take().context("Failed to get stderr")?;
@@ -123,25 +125,19 @@ async fn run_start(ctx: &TaskContext, task: &StartGameTask) -> Result<()> {
 	loop {
 		tokio::select! {
 			line = stdout_reader.next_line() => {
-				if let Ok(Some(log)) = line {
-					if is_game_initialized(&log) {
-						tracing::info!("game initialized (detected from log), task completed");
-						return Ok(());
-					}
+				if let Some(done) = handle_line(line, &mut child, start_time, "stdout")? {
+					return Ok(done);
 				}
 			}
 			line = stderr_reader.next_line() => {
-				if let Ok(Some(log)) = line {
-					if is_game_initialized(&log) {
-						tracing::info!("game initialized (detected from log), task completed");
-						return Ok(());
-					}
+				if let Some(done) = handle_line(line, &mut child, start_time, "stderr")? {
+					return Ok(done);
 				}
 			}
 			_ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-				if let Ok(Some(status)) = child.try_wait() {
+				if let Some(status) = child.try_wait()? {
 					if !status.success() {
-						return Err(anyhow::anyhow!("Game exited with status: {:?}", status.code()));
+						return Err(anyhow!("Game exited with status: {:?}", status.code()));
 					}
 					tracing::info!("game process exited, task completed");
 					return Ok(());
@@ -152,10 +148,10 @@ async fn run_start(ctx: &TaskContext, task: &StartGameTask) -> Result<()> {
 					return Ok(());
 				}
 			}
-		_ = cancelled.changed() => {
-			let _ = child.kill().await;
-			return Err(anyhow::anyhow!("Game start cancelled"));
-		}
+			_ = cancelled.changed() => {
+				let _ = child.kill().await;
+				return Err(anyhow::anyhow!("Game start cancelled"));
+			}
 		}
 	}
 }
@@ -167,4 +163,41 @@ fn is_game_initialized(log: &str) -> bool {
 		|| lower.contains("openal initialized")
 		|| lower.contains("starting up soundsystem")
 		|| lower.contains("setting user:")
+}
+
+fn handle_line(
+	line: std::io::Result<Option<String>>,
+	child: &mut tokio::process::Child,
+	start_time: Instant,
+	label: &str,
+) -> Result<Option<()>> {
+	match line {
+		Ok(Some(log)) if is_game_initialized(&log) => {
+			tracing::info!("game initialized (detected from {label}), task completed");
+			Ok(Some(()))
+		}
+		Ok(Some(_)) => Ok(None),
+		Ok(None) => {
+			if let Some(status) = child.try_wait()? {
+				if !status.success() {
+					return Err(anyhow!("Game exited with status: {:?}", status.code()));
+				}
+				tracing::info!("game process exited ({label} closed), task completed");
+				return Ok(Some(()));
+			}
+
+			if start_time.elapsed() > MAX_WAIT_TIME {
+				tracing::warn!(
+					"timeout waiting for game initialization ({label} closed), assuming it started"
+				);
+				return Ok(Some(()));
+			}
+
+			Ok(None)
+		}
+		Err(err) => {
+			tracing::warn!("read {label} failed: {:?}", err);
+			Ok(None)
+		}
+	}
 }
