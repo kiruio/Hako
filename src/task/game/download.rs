@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::fs;
 use tokio::sync::watch;
-use tracing::{debug, info};
 
 pub struct DownloadGameTask {
 	pub cluster_path: PathBuf,
@@ -379,7 +378,7 @@ impl SubTask for AssetsTask {
 }
 
 async fn resolve_version_url(version_id: &str) -> TaskResult<String> {
-	const MANIFEST: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
+	const MANIFEST: &str = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
 
 	let resp = reqwest::get(MANIFEST)
 		.await

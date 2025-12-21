@@ -1,6 +1,9 @@
 use crate::ui::app::HakoApp;
 use anyhow::Result;
-use gpui::{AppContext, Application, WindowOptions};
+use gpui::{
+	AppContext, Application, Bounds, Point, Size, TitlebarOptions, WindowBounds, WindowOptions,
+	bounds, px, size,
+};
 
 mod account;
 mod config;
@@ -20,6 +23,17 @@ fn main() -> Result<()> {
 	Application::new().run(|ctx| {
 		let _ = ctx.open_window(
 			WindowOptions {
+				titlebar: Some(TitlebarOptions {
+					title: Some("Hako".into()),
+					appears_transparent: true,
+					traffic_light_position: None,
+				}),
+				window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+					None,
+					size(px(800.), px(600.0)),
+					ctx,
+				))),
+				window_min_size: Some(size(px(1050.0), px(590.0))),
 				..Default::default()
 			},
 			|_, c| match HakoApp::new() {
@@ -29,6 +43,7 @@ fn main() -> Result<()> {
 				}
 			},
 		);
+		ctx.activate(true);
 	});
 
 	Ok(())
