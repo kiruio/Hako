@@ -1,9 +1,6 @@
 use crate::ui::app::HakoApp;
 use anyhow::Result;
-use gpui::{
-	AppContext, Application, Bounds, Point, Size, TitlebarOptions, WindowBounds, WindowOptions,
-	bounds, px, size,
-};
+use gpui::{AppContext, Application, TitlebarOptions, WindowBounds, WindowOptions, px};
 
 mod account;
 mod config;
@@ -28,20 +25,16 @@ fn main() -> Result<()> {
 					appears_transparent: true,
 					traffic_light_position: None,
 				}),
-				window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+				window_bounds: Some(WindowBounds::Windowed(gpui::Bounds::centered(
 					None,
-					size(px(800.), px(600.0)),
+					gpui::size(px(800.), px(600.0)),
 					ctx,
 				))),
-				window_min_size: Some(size(px(1050.0), px(590.0))),
+				kind: gpui::WindowKind::Normal,
+				window_min_size: Some(gpui::size(px(1050.0), px(590.0))),
 				..Default::default()
 			},
-			|_, c| match HakoApp::new() {
-				Ok(app) => c.new(|_| app),
-				Err(e) => {
-					panic!("Failed to initialize: {}", e);
-				}
-			},
+			|_, c| c.new(|ctx| HakoApp::new(ctx)),
 		);
 		ctx.activate(true);
 	});
