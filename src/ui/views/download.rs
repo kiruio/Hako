@@ -1,8 +1,8 @@
 use gpui::{div, prelude::*, rgb};
 
-pub fn render_home() -> impl IntoElement {
+pub fn render_download() -> impl IntoElement {
 	div()
 		.flex_grow()
-		.child("Home View")
+		.child("Download View")
 		.text_color(rgb(0xffffff))
 }

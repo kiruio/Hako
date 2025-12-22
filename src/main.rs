@@ -1,6 +1,6 @@
-use crate::ui::app::HakoApp;
+use crate::ui::{app::HakoApp, build_window_options};
 use anyhow::Result;
-use gpui::{AppContext, Application, TitlebarOptions, WindowBounds, WindowOptions, px};
+use gpui::{AppContext, Application};
 
 mod account;
 mod config;
@@ -17,26 +17,13 @@ fn main() -> Result<()> {
 	let rt = tokio::runtime::Runtime::new()?;
 	let _guard = rt.enter();
 
-	Application::new().run(|ctx| {
-		let _ = ctx.open_window(
-			WindowOptions {
-				titlebar: Some(TitlebarOptions {
-					title: Some("Hako".into()),
-					appears_transparent: true,
-					traffic_light_position: None,
-				}),
-				window_bounds: Some(WindowBounds::Windowed(gpui::Bounds::centered(
-					None,
-					gpui::size(px(800.), px(600.0)),
-					ctx,
-				))),
-				kind: gpui::WindowKind::Normal,
-				window_min_size: Some(gpui::size(px(1050.0), px(590.0))),
-				..Default::default()
-			},
-			|_, c| c.new(|ctx| HakoApp::new(ctx)),
-		);
-		ctx.activate(true);
+	Application::new().run(|cx| {
+		gpui_router::init(cx);
+		cx.activate(true);
+		cx.open_window(build_window_options(cx), |_, cx| {
+			cx.new(|cx| HakoApp::new(cx))
+		})
+		.expect("Open window failed.");
 	});
 
 	Ok(())
