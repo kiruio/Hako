@@ -5,12 +5,10 @@ pub mod components {
 	pub mod navbar;
 	pub mod topbar;
 }
-pub mod views {
-	pub mod download;
-	pub mod home;
-}
+pub mod views;
 
 const WINDOW_SIZE: gpui::Size<gpui::Pixels> = gpui::size(px(1050.), px(590.));
+
 pub fn build_window_options(cx: &App) -> WindowOptions {
 	WindowOptions {
 		titlebar: Some(TitlebarOptions {

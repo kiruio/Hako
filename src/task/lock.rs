@@ -47,7 +47,7 @@ impl LockManager {
 
 		for key in keys {
 			if !locks.insert(key.clone()) {
-				return Err(format!("Lock conflict: {:?}", key));
+				return Err(format!("Found {:?}", key));
 			}
 		}
 
