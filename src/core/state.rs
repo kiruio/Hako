@@ -1,44 +1,65 @@
+use crate::account::AccountManager;
+use crate::config::manager::ConfigManager;
 use crate::game::instance::GameInstance;
-use crate::task::game::download::DownloadProgressState;
+use crate::task::game::download::{DownloadProgressState, ProgressRef};
 use crate::task::handle::TaskId;
 use crate::task::manager::TaskManager;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+
+static APP_STATE: OnceLock<AppState> = OnceLock::new();
 
 pub struct AppState {
+	pub config: ConfigManager,
+	pub accounts: AccountManager,
 	pub task_manager: Arc<TaskManager>,
-	pub instances: Arc<Mutex<Vec<GameInstance>>>,
-	pub current_instance: Arc<Mutex<Option<usize>>>,
-	pub cluster_path: Arc<Mutex<PathBuf>>,
-	pub task_progress: Arc<Mutex<HashMap<TaskId, Arc<Mutex<DownloadProgressState>>>>>,
+	pub instances: RwLock<Vec<GameInstance>>,
+	pub current_instance: Mutex<Option<usize>>,
+	pub task_progress: Mutex<HashMap<TaskId, ProgressRef>>,
 }
 
 impl AppState {
-	pub fn new() -> Self {
-		let cluster = crate::core::paths::default_minecraft_dir()
-			.unwrap_or_else(|| PathBuf::from(".minecraft"));
+	pub fn init() -> &'static Self {
+		APP_STATE.get_or_init(|| {
+			let state = Self::create();
+			state.scan_instances();
+			state
+		})
+	}
 
+	pub fn get() -> &'static Self {
+		APP_STATE.get().expect("AppState not initialized")
+	}
+
+	fn create() -> Self {
 		Self {
+			config: ConfigManager::default(),
+			accounts: AccountManager::new(),
 			task_manager: Arc::new(TaskManager::new()),
-			instances: Arc::new(Mutex::new(Vec::new())),
-			current_instance: Arc::new(Mutex::new(None)),
-			cluster_path: Arc::new(Mutex::new(cluster)),
-			task_progress: Arc::new(Mutex::new(HashMap::new())),
+			instances: RwLock::new(Vec::new()),
+			current_instance: Mutex::new(None),
+			task_progress: Mutex::new(HashMap::new()),
 		}
 	}
 
+	pub fn cluster_path(&self) -> PathBuf {
+		self.config.get().cluster_path.unwrap_or_else(|| {
+			crate::core::paths::default_minecraft_dir().unwrap_or_else(|| ".minecraft".into())
+		})
+	}
+
 	pub fn scan_instances(&self) {
-		let path = self.cluster_path.lock().unwrap().clone();
+		let path = self.cluster_path();
 		if let Ok(found) = crate::game::instance::InstanceScanner::scan_cluster(&path) {
-			let mut guard = self.instances.lock().unwrap();
+			let mut guard = self.instances.write().unwrap();
+			tracing::info!("Scanned {} instances from {}", found.len(), path.display());
 			*guard = found;
-			tracing::info!("Scanned {} instances from {}", guard.len(), path.display());
 		}
 	}
 
 	pub fn set_cluster_path(&self, path: PathBuf) {
-		*self.cluster_path.lock().unwrap() = path;
+		let _ = self.config.update(|c| c.cluster_path = Some(path));
 		self.scan_instances();
 	}
 
@@ -47,29 +68,16 @@ impl AppState {
 	}
 
 	pub fn current_instance(&self) -> Option<GameInstance> {
-		let idx = self.current_instance.lock().unwrap().clone()?;
-		self.instances.lock().unwrap().get(idx).cloned()
+		let idx = (*self.current_instance.lock().unwrap())?;
+		self.instances.read().unwrap().get(idx).cloned()
 	}
 
-	pub fn register_progress(&self, id: TaskId) -> Arc<Mutex<DownloadProgressState>> {
-		let progress = Arc::new(Mutex::new(DownloadProgressState::default()));
+	pub fn register_progress(&self, id: TaskId) -> ProgressRef {
+		let progress = Arc::new(tokio::sync::RwLock::new(DownloadProgressState::default()));
 		self.task_progress
 			.lock()
 			.unwrap()
-			.insert(id, progress.clone());
+			.insert(id, Arc::clone(&progress));
 		progress
-	}
-
-	pub fn cleanup_finished_tasks(&self) {
-		self.task_progress
-			.lock()
-			.unwrap()
-			.retain(|_, p| !p.lock().map(|g| g.finished).unwrap_or(true));
-	}
-}
-
-impl Default for AppState {
-	fn default() -> Self {
-		Self::new()
 	}
 }

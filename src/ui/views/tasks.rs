@@ -1,13 +1,13 @@
 use crate::core::state::AppState;
-use crate::task::game::download::DownloadProgressState;
+use crate::task::game::download::{DownloadProgressState, ProgressRef};
 use crate::task::handle::TaskId;
 use gpui::{div, prelude::*, px, rgb};
-use std::sync::{Arc, Mutex};
 
 pub struct TasksView;
 
 impl TasksView {
-	pub fn render(state: Arc<AppState>) -> impl IntoElement {
+	pub fn render() -> impl IntoElement {
+		let state = AppState::get();
 		let tasks: Vec<_> = state
 			.task_progress
 			.lock()
@@ -51,18 +51,17 @@ impl TasksView {
 					.children(
 						tasks
 							.into_iter()
-							.map(|(id, p)| Self::render_task_item(id, p, state.clone())),
+							.map(|(id, p)| Self::render_task_item(id, p)),
 					)
 					.into_any_element()
 			})
 	}
 
-	fn render_task_item(
-		task_id: TaskId,
-		progress: Arc<Mutex<DownloadProgressState>>,
-		state: Arc<AppState>,
-	) -> impl IntoElement {
-		let p = progress.lock().unwrap().clone();
+	fn render_task_item(task_id: TaskId, progress: ProgressRef) -> impl IntoElement {
+		let p = {
+			let rt = tokio::runtime::Handle::current();
+			rt.block_on(async { progress.read().await.clone() })
+		};
 		let percent = p
 			.total
 			.map(|t| {
@@ -89,7 +88,7 @@ impl TasksView {
 			})
 			.unwrap_or_else(|| format!("{:.1} MB", p.downloaded as f64 / 1024.0 / 1024.0));
 
-		let task_manager = state.task_manager.clone();
+		let task_manager = AppState::get().task_manager.clone();
 
 		div()
 			.flex()

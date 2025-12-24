@@ -1,12 +1,12 @@
 use crate::core::state::AppState;
 use gpui::{div, prelude::*, rgb};
-use std::sync::Arc;
 
 pub struct SettingsView;
 
 impl SettingsView {
-	pub fn render(state: Arc<AppState>) -> impl IntoElement {
-		let cluster_path = state.cluster_path.lock().unwrap().clone();
+	pub fn render() -> impl IntoElement {
+		let config = AppState::get().config.get();
+		let cluster_path = AppState::get().cluster_path();
 
 		div()
 			.flex()
@@ -26,10 +26,14 @@ impl SettingsView {
 						&cluster_path.display().to_string(),
 						"Minecraft 实例存储位置",
 					))
-					.child(Self::render_setting_item("主题", "深色", "界面主题设置"))
+					.child(Self::render_setting_item(
+						"主题",
+						&config.theme,
+						"界面主题设置",
+					))
 					.child(Self::render_setting_item(
 						"语言",
-						"简体中文",
+						&config.language,
 						"界面显示语言",
 					)),
 			))
@@ -41,22 +45,35 @@ impl SettingsView {
 					.gap_3()
 					.child(Self::render_setting_item(
 						"Java 路径",
-						"自动检测",
+						config
+							.game
+							.java_path
+							.as_ref()
+							.map(|p| p.display().to_string())
+							.as_deref()
+							.unwrap_or("自动检测"),
 						"游戏使用的 Java 运行时",
 					))
 					.child(Self::render_setting_item(
 						"最大内存",
-						"4096 MB",
+						&format!("{} MB", config.game.max_memory_mb),
 						"JVM 最大内存分配",
 					))
 					.child(Self::render_setting_item(
 						"窗口大小",
-						"854 x 480",
+						&format!(
+							"{} x {}",
+							config.game.window_width, config.game.window_height
+						),
 						"游戏窗口默认尺寸",
 					))
 					.child(Self::render_setting_item(
 						"JVM 参数",
-						"默认",
+						if config.game.jvm_args.is_empty() {
+							"默认"
+						} else {
+							&config.game.jvm_args
+						},
 						"额外的 JVM 启动参数",
 					)),
 			))
@@ -68,13 +85,8 @@ impl SettingsView {
 					.gap_3()
 					.child(Self::render_setting_item(
 						"下载并发数",
-						"5",
+						&config.download_concurrency.to_string(),
 						"同时下载的文件数量",
-					))
-					.child(Self::render_setting_item(
-						"下载源",
-						"官方",
-						"游戏文件下载源",
 					)),
 			))
 	}

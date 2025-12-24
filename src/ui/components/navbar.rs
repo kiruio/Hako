@@ -1,34 +1,26 @@
 use crate::core::state::AppState;
 use crate::task::game::start::StartGameTask;
-use crate::task::priority::Priority;
 use gpui::{Context, Render, Window, div, prelude::*, px, rgb, white};
 use gpui_router::NavLink;
-use std::sync::Arc;
 
-pub struct Navbar {
-	state: Arc<AppState>,
-}
+pub struct Navbar;
 
 impl Navbar {
-	pub fn new(state: Arc<AppState>, _cx: &mut Context<Self>) -> Self {
-		Self { state }
+	pub fn new(_cx: &mut Context<Self>) -> Self {
+		Self
 	}
 
 	fn launch_current(&self) {
-		let Some(inst) = self.state.current_instance() else {
+		let state = AppState::get();
+		let Some(inst) = state.current_instance() else {
 			return;
 		};
-		let tm = self.state.task_manager.clone();
+		let tm = state.task_manager.clone();
 		let ver = inst.version.clone();
 		tokio::runtime::Handle::current().spawn(async move {
-			let task = StartGameTask {
-				instance: inst,
-				java_path: None,
-				jvm_args: vec![],
-				game_args: vec![],
-			};
-			match tm.submit_blocking(task, Priority::Normal).await {
-				Ok(h) => {
+			let task = StartGameTask { instance: inst };
+			match tm.submit_blocking(task).await {
+				Ok(mut h) => {
 					tracing::info!("启动: {} ({})", ver, h.id);
 					tokio::spawn(async move {
 						let _ = h.result().await;
@@ -42,7 +34,7 @@ impl Navbar {
 
 impl Render for Navbar {
 	fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-		let has_instance = self.state.current_instance.lock().unwrap().is_some();
+		let has_instance = AppState::get().current_instance.lock().unwrap().is_some();
 
 		div()
 			.flex()

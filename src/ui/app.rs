@@ -6,31 +6,25 @@ use crate::ui::views::{
 };
 use gpui::{Context, Entity, Render, Window, div, prelude::*, rgb};
 use gpui_router::{Route, Routes};
-use std::sync::Arc;
 
 pub struct HakoApp {
 	topbar: Entity<Topbar>,
 	navbar: Entity<Navbar>,
-	pub state: Arc<AppState>,
 }
 
 impl HakoApp {
 	pub fn new(ctx: &mut Context<Self>) -> Self {
-		let state = Arc::new(AppState::new());
-		state.scan_instances();
+		AppState::init();
 
 		Self {
-			topbar: ctx.new(|_| Topbar::new(state.clone())),
-			navbar: ctx.new(|cx| Navbar::new(state.clone(), cx)),
-			state,
+			topbar: ctx.new(|_| Topbar::new()),
+			navbar: ctx.new(|cx| Navbar::new(cx)),
 		}
 	}
 }
 
 impl Render for HakoApp {
-	fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-		let state = self.state.clone();
-
+	fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
 		div()
 			.flex()
 			.flex_col()
@@ -46,11 +40,7 @@ impl Render for HakoApp {
 					.child(
 						Routes::new()
 							.basename("/")
-							.child(
-								Route::new()
-									.index()
-									.element(HomeView::render()),
-							)
+							.child(Route::new().index().element(HomeView::render()))
 							.child(
 								Route::new()
 									.path("download")
@@ -59,17 +49,13 @@ impl Render for HakoApp {
 							.child(
 								Route::new()
 									.path("instances")
-									.element(InstancesView::render(state.clone())),
+									.element(InstancesView::render()),
 							)
-							.child(
-								Route::new()
-									.path("tasks")
-									.element(TasksView::render(state.clone())),
-							)
+							.child(Route::new().path("tasks").element(TasksView::render()))
 							.child(
 								Route::new()
 									.path("settings")
-									.element(SettingsView::render(state.clone())),
+									.element(SettingsView::render()),
 							),
 					),
 			)

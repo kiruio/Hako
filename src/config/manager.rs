@@ -3,65 +3,88 @@ use crate::config::launcher::LauncherConfig;
 use crate::core::paths;
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::RwLock;
 
 pub struct ConfigManager {
-	config_dir: PathBuf,
+	config: RwLock<LauncherConfig>,
 }
 
 impl ConfigManager {
 	pub fn new() -> Result<Self> {
-		let config_dir = paths::config_dir()?;
-		fs::create_dir_all(&config_dir).context("Failed to create config directory")?;
-		Ok(Self { config_dir })
+		let config = Self::load_from_disk()?;
+		Ok(Self {
+			config: RwLock::new(config),
+		})
 	}
 
-	pub fn load_launcher_config(&self) -> Result<LauncherConfig> {
-		let config_path = self.config_dir.join("config.yml");
+	fn load_from_disk() -> Result<LauncherConfig> {
+		let config_path = paths::config_dir()?.join("config.yml");
 		if !config_path.exists() {
 			return Ok(LauncherConfig::default());
 		}
-		let content = fs::read_to_string(&config_path).context("Failed to read config file")?;
-		let config: LauncherConfig =
-			serde_yaml::from_str(&content).context("Failed to parse config file")?;
-		let mut default = LauncherConfig::default();
-		default.merge(&config);
-		Ok(default)
+		let content = fs::read_to_string(&config_path).context("read config")?;
+		serde_yaml::from_str(&content).context("parse config")
 	}
 
-	pub fn save_launcher_config(&self, config: &LauncherConfig) -> Result<()> {
-		let config_path = self.config_dir.join("config.yml");
-		let yaml = serde_yaml::to_string(config).context("Failed to serialize config")?;
-		fs::write(&config_path, yaml).context("Failed to write config file")?;
+	pub fn get(&self) -> LauncherConfig {
+		self.config.read().unwrap().clone()
+	}
+
+	pub fn update<F>(&self, f: F) -> Result<()>
+	where
+		F: FnOnce(&mut LauncherConfig),
+	{
+		let mut config = self.config.write().unwrap();
+		f(&mut config);
+		self.save_to_disk(&config)
+	}
+
+	fn save_to_disk(&self, config: &LauncherConfig) -> Result<()> {
+		let config_dir = paths::config_dir()?;
+		fs::create_dir_all(&config_dir)?;
+		let yaml = serde_yaml::to_string(config)?;
+		fs::write(config_dir.join("config.yml"), yaml)?;
 		Ok(())
 	}
 
-	pub fn load_game_config(&self, cluster_path: &Path, version: &str) -> Result<GameConfig> {
-		let config_path = cluster_path
+	pub fn reload(&self) -> Result<()> {
+		let new_config = Self::load_from_disk()?;
+		*self.config.write().unwrap() = new_config;
+		Ok(())
+	}
+
+	// 游戏实例配置
+	pub fn load_game_config(cluster_path: &Path, version: &str) -> GameConfig {
+		let path = cluster_path
 			.join("versions")
 			.join(version)
 			.join("Hako")
 			.join("settings.yml");
-		if !config_path.exists() {
-			return Ok(GameConfig::default());
+
+		if !path.exists() {
+			return GameConfig::default();
 		}
-		let content = fs::read_to_string(&config_path).context("Failed to read game config")?;
-		let config: GameConfig =
-			serde_yaml::from_str(&content).context("Failed to parse game config")?;
-		Ok(config)
+
+		fs::read_to_string(&path)
+			.ok()
+			.and_then(|s| serde_yaml::from_str(&s).ok())
+			.unwrap_or_default()
 	}
 
-	pub fn save_game_config(
-		&self,
-		cluster_path: &Path,
-		version: &str,
-		config: &GameConfig,
-	) -> Result<()> {
-		let config_dir = cluster_path.join("versions").join(version).join("Hako");
-		fs::create_dir_all(&config_dir).context("Failed to create game config directory")?;
-		let config_path = config_dir.join("settings.yml");
-		let yaml = serde_yaml::to_string(config).context("Failed to serialize game config")?;
-		fs::write(&config_path, yaml).context("Failed to write game config file")?;
+	pub fn save_game_config(cluster_path: &Path, version: &str, config: &GameConfig) -> Result<()> {
+		let dir = cluster_path.join("versions").join(version).join("Hako");
+		fs::create_dir_all(&dir)?;
+		let yaml = serde_yaml::to_string(config)?;
+		fs::write(dir.join("settings.yml"), yaml)?;
 		Ok(())
+	}
+}
+
+impl Default for ConfigManager {
+	fn default() -> Self {
+		Self::new().unwrap_or_else(|_| Self {
+			config: RwLock::new(LauncherConfig::default()),
+		})
 	}
 }

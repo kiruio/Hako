@@ -5,7 +5,7 @@ pub fn init() {
 
 	tracing_subscriber::fmt()
 		.with_env_filter(filter)
-		.with_target(false)
+		.with_target(true)
 		.with_thread_ids(false)
 		.with_thread_names(false)
 		.init();

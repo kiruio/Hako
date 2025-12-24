@@ -1,47 +1,98 @@
-use crate::account::offline_uuid;
+use crate::config::manager::ConfigManager;
+use crate::core::state::AppState;
 use crate::game::args::{Features, collect_game_args, collect_jvm_args};
 use crate::game::classpath::build_classpath;
 use crate::game::instance::GameInstance;
 use crate::game::java::find_java;
 use crate::game::natives::{extract_natives, get_natives_directory};
-use crate::game::profile::load_version_profile;
+use crate::game::profile::{VersionProfile, load_version_profile};
 use crate::task::error::{TaskError, TaskResult};
 use crate::task::lock::LockKey;
 use crate::task::main_task::{BlockingTask, TaskContext, TaskType};
 use crate::task::sub_task::{SubTask, SubTaskChain, SubTaskContext};
-use anyhow::{Context, Result, anyhow};
+use anyhow::Context;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::AsyncBufReadExt;
-use tokio::process::{Child, Command};
+use tokio::process::Command;
+use tokio::sync::RwLock;
 
 const MAX_WAIT_TIME: Duration = Duration::from_secs(30);
 
+struct StartContext {
+	game_dir: PathBuf,
+	version_id: String,
+	java_path: Option<PathBuf>,
+	max_memory_mb: u32,
+	extra_jvm_args: Vec<String>,
+	extra_game_args: Vec<String>,
+
+	profile: Option<VersionProfile>,
+	natives_dir: Option<PathBuf>,
+	java_bin: Option<PathBuf>,
+	classpath: Option<String>,
+	jvm_args: Vec<String>,
+	game_args: Vec<String>,
+	username: String,
+	uuid: String,
+}
+
+impl StartContext {
+	fn from_instance(instance: &GameInstance) -> Self {
+		let state = AppState::get();
+		let launcher_config = state.config.get();
+		let game_config =
+			ConfigManager::load_game_config(&instance.cluster_path, &instance.version);
+		let resolved = game_config.resolve(&launcher_config.game);
+
+		let (username, uuid) = state
+			.accounts
+			.current()
+			.map(|a| (a.username().to_string(), a.uuid().to_string()))
+			.unwrap_or_else(|| {
+				(
+					"Player".into(),
+					crate::account::offline_uuid("Player").to_string(),
+				)
+			});
+
+		let jvm_args: Vec<String> = resolved
+			.jvm_args
+			.split_whitespace()
+			.map(String::from)
+			.collect();
+		let game_args: Vec<String> = resolved
+			.game_args
+			.split_whitespace()
+			.map(String::from)
+			.collect();
+
+		Self {
+			game_dir: instance.cluster_path.clone(),
+			version_id: instance.version.clone(),
+			java_path: resolved.java_path,
+			max_memory_mb: resolved.max_memory_mb,
+			extra_jvm_args: jvm_args,
+			extra_game_args: game_args,
+			profile: None,
+			natives_dir: None,
+			java_bin: None,
+			classpath: None,
+			jvm_args: Vec::new(),
+			game_args: Vec::new(),
+			username,
+			uuid,
+		}
+	}
+}
+
 pub struct StartGameTask {
 	pub instance: GameInstance,
-	pub java_path: Option<PathBuf>,
-	pub jvm_args: Vec<String>,
-	pub game_args: Vec<String>,
 }
 
 impl TaskType for StartGameTask {
 	const TYPE_NAME: &'static str = "start_game";
-}
-
-#[derive(Clone)]
-struct StartShared {
-	game_dir: PathBuf,
-	version_id: String,
-	profile: Option<crate::game::profile::VersionProfile>,
-	features: Features,
-	natives_dir: Option<PathBuf>,
-	java_bin: Option<PathBuf>,
-	classpath: Option<String>,
-	username: String,
-	uuid: String,
-	jvm_args: Vec<String>,
-	game_args: Vec<String>,
 }
 
 #[async_trait::async_trait]
@@ -57,186 +108,104 @@ impl BlockingTask for StartGameTask {
 	}
 
 	async fn execute(&mut self, ctx: &TaskContext) -> TaskResult<Self::Output> {
-		let game_dir = self.instance.cluster_path.clone();
-		let version_id = self.instance.version.clone();
-
-		tracing::info!(
-			"start task begin: dir={}, version={}",
-			game_dir.display(),
-			version_id
-		);
-
-		let shared = StartShared {
-			game_dir,
-			version_id,
-			profile: None,
-			features: Features::default(),
-			natives_dir: None,
-			java_bin: None,
-			classpath: None,
-			username: "demo".to_string(),
-			uuid: offline_uuid("demo").to_string(),
-			jvm_args: self.jvm_args.clone(),
-			game_args: self.game_args.clone(),
-		};
-
-		let shared = Arc::new(tokio::sync::Mutex::new(shared));
+		let shared = Arc::new(RwLock::new(StartContext::from_instance(&self.instance)));
 
 		let mut chain = SubTaskChain::new();
-		chain.add(AccountPrepareTask {
-			shared: shared.clone(),
-		});
-		chain.add(EnvPrepareTask {
-			shared: shared.clone(),
-			java_path: self.java_path.clone(),
-		});
-		chain.add(IntegrityCheckTask {
-			shared: shared.clone(),
-		});
-		chain.add(LaunchAndWaitTask { shared });
+		chain.add(PrepareEnvTask(Arc::clone(&shared)));
+		chain.add(LaunchTask(shared));
 
 		let sub_ctx = SubTaskContext::new(ctx.cancelled_receiver());
-		chain
-			.execute(&sub_ctx)
-			.await
-			.map_err(|e| TaskError::Failed(e.to_string()))
+		chain.execute(&sub_ctx).await
 	}
 }
 
-struct AccountPrepareTask {
-	shared: Arc<tokio::sync::Mutex<StartShared>>,
-}
+struct PrepareEnvTask(Arc<RwLock<StartContext>>);
 
 #[async_trait::async_trait]
-impl SubTask for AccountPrepareTask {
+impl SubTask for PrepareEnvTask {
 	async fn execute(&self, _ctx: &SubTaskContext) -> Result<(), TaskError> {
-		// 目前账号准备逻辑极简，保留为独立子任务以便将来扩展
-		let mut shared = self.shared.lock().await;
-		shared.username = "demo".to_string();
-		shared.uuid = offline_uuid(&shared.username).to_string();
-		Ok(())
-	}
-}
+		let mut s = self.0.write().await;
 
-struct EnvPrepareTask {
-	shared: Arc<tokio::sync::Mutex<StartShared>>,
-	java_path: Option<PathBuf>,
-}
+		let profile = load_version_profile(&s.game_dir, &s.version_id)
+			.map_err(|e| TaskError::Failed(format!("load profile: {e}")))?;
 
-#[async_trait::async_trait]
-impl SubTask for EnvPrepareTask {
-	async fn execute(&self, _ctx: &SubTaskContext) -> Result<(), TaskError> {
-		let mut shared = self.shared.lock().await;
-
-		let profile = load_version_profile(&shared.game_dir, &shared.version_id)
-			.map_err(|e| TaskError::Failed(format!("load version profile failed: {e}")))?;
-
-		let natives_dir = get_natives_directory(&shared.game_dir, &shared.version_id)
+		let natives_dir = get_natives_directory(&s.game_dir, &s.version_id)
 			.map_err(|e| TaskError::Failed(e.to_string()))?;
-		extract_natives(&shared.game_dir, &profile, &natives_dir, &shared.features)
+
+		let features = Features::default();
+		extract_natives(&s.game_dir, &profile, &natives_dir, &features)
 			.map_err(|e| TaskError::Failed(e.to_string()))?;
 
 		let java_bin =
-			find_java(self.java_path.clone()).map_err(|e| TaskError::Failed(e.to_string()))?;
-		tracing::info!("java resolved: {}", java_bin.display());
+			find_java(s.java_path.take()).map_err(|e| TaskError::Failed(e.to_string()))?;
 
-		let cp = build_classpath(
-			&shared.game_dir,
-			&shared.version_id,
-			&profile,
-			&shared.features,
-		)
-		.map_err(|e| TaskError::Failed(e.to_string()))?;
+		let cp = build_classpath(&s.game_dir, &s.version_id, &profile, &features)
+			.map_err(|e| TaskError::Failed(e.to_string()))?;
 
 		let assets_index = profile
 			.assets
 			.as_deref()
-			.unwrap_or(&shared.version_id)
+			.unwrap_or(&s.version_id)
 			.to_string();
 
-		let jvm_args = collect_jvm_args(
+		let mut jvm_args = collect_jvm_args(
 			&profile,
-			&shared.game_dir,
-			&shared.version_id,
+			&s.game_dir,
+			&s.version_id,
 			&cp,
 			&assets_index,
-			&shared.username,
-			&shared.uuid,
-			&get_natives_directory(&shared.game_dir, &shared.version_id)
-				.map_err(|e| TaskError::Failed(e.to_string()))?,
-			&shared.features,
+			&s.username,
+			&s.uuid,
+			&natives_dir,
+			&features,
 		);
+
+		jvm_args.insert(0, format!("-Xmx{}M", s.max_memory_mb));
 
 		let game_args = collect_game_args(
-			&shared.game_dir,
-			&shared.version_id,
+			&s.game_dir,
+			&s.version_id,
 			&profile,
-			&shared.username,
-			&shared.uuid,
+			&s.username,
+			&s.uuid,
 			&assets_index,
-			&shared.features,
+			&features,
 		);
 
-		shared.profile = Some(profile);
-		shared.natives_dir = Some(natives_dir);
-		shared.java_bin = Some(java_bin);
-		shared.classpath = Some(cp);
-		shared.jvm_args.extend(jvm_args);
-		shared.game_args.extend(game_args);
+		s.profile = Some(profile);
+		s.natives_dir = Some(natives_dir);
+		s.java_bin = Some(java_bin);
+		s.classpath = Some(cp);
+		s.jvm_args = jvm_args;
+		let extra_jvm = std::mem::take(&mut s.extra_jvm_args);
+		s.jvm_args.extend(extra_jvm);
+		s.game_args = game_args;
+		let extra_game = std::mem::take(&mut s.extra_game_args);
+		s.game_args.extend(extra_game);
 
 		Ok(())
 	}
 }
 
-struct IntegrityCheckTask {
-	shared: Arc<tokio::sync::Mutex<StartShared>>,
-}
+struct LaunchTask(Arc<RwLock<StartContext>>);
 
 #[async_trait::async_trait]
-impl SubTask for IntegrityCheckTask {
-	async fn execute(&self, _ctx: &SubTaskContext) -> Result<(), TaskError> {
-		let shared = self.shared.lock().await;
-
-		if shared.profile.is_none()
-			|| shared.java_bin.is_none()
-			|| shared.classpath.is_none()
-			|| shared.natives_dir.is_none()
-		{
-			return Err(TaskError::Failed("start context incomplete".into()));
-		}
-
-		if shared.jvm_args.is_empty() {
-			return Err(TaskError::Failed("jvm args empty".into()));
-		}
-
-		if shared.game_args.is_empty() {
-			return Err(TaskError::Failed("game args empty".into()));
-		}
-
-		Ok(())
-	}
-}
-
-struct LaunchAndWaitTask {
-	shared: Arc<tokio::sync::Mutex<StartShared>>,
-}
-
-#[async_trait::async_trait]
-impl SubTask for LaunchAndWaitTask {
+impl SubTask for LaunchTask {
 	async fn execute(&self, ctx: &SubTaskContext) -> Result<(), TaskError> {
-		let shared = self.shared.lock().await;
-		let profile = shared
+		let s = self.0.read().await;
+
+		let profile = s
 			.profile
-			.clone()
+			.as_ref()
 			.ok_or_else(|| TaskError::Failed("profile missing".into()))?;
-		let java_bin = shared
+		let java_bin = s
 			.java_bin
-			.clone()
+			.as_ref()
 			.ok_or_else(|| TaskError::Failed("java missing".into()))?;
-		let game_dir = shared.game_dir.clone();
-		let jvm_args = shared.jvm_args.clone();
-		let game_args = shared.game_args.clone();
-		drop(shared);
+		let main_class = profile
+			.main_class
+			.as_ref()
+			.ok_or_else(|| TaskError::Failed("mainClass missing".into()))?;
 
 		let mut cmd = Command::new(java_bin);
 
@@ -246,69 +215,62 @@ impl SubTask for LaunchAndWaitTask {
 			cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
 		}
 
-		cmd.args(jvm_args)
-			.arg(
-				profile
-					.main_class
-					.context("mainClass missing")
-					.map_err(|e| TaskError::Failed(e.to_string()))?,
-			)
-			.args(game_args)
-			.current_dir(&game_dir)
+		cmd.args(&s.jvm_args)
+			.arg(main_class)
+			.args(&s.game_args)
+			.current_dir(&s.game_dir)
 			.stdin(std::process::Stdio::null())
 			.stdout(std::process::Stdio::piped())
 			.stderr(std::process::Stdio::piped());
 
 		let mut child = cmd
 			.spawn()
-			.context("Failed to start game process")
+			.context("spawn game process")
 			.map_err(|e| TaskError::Failed(e.to_string()))?;
-		tracing::info!("game process spawned, waiting for game to initialize");
 
-		let mut cancelled = ctx.cancelled.clone();
-		let start_time = Instant::now();
+		drop(s);
 
 		let stdout = child
 			.stdout
 			.take()
-			.context("Failed to get stdout")
-			.map_err(|e| TaskError::Failed(e.to_string()))?;
+			.ok_or_else(|| TaskError::Failed("no stdout".into()))?;
 		let stderr = child
 			.stderr
 			.take()
-			.context("Failed to get stderr")
-			.map_err(|e| TaskError::Failed(e.to_string()))?;
+			.ok_or_else(|| TaskError::Failed("no stderr".into()))?;
 
-		let mut stdout_reader = tokio::io::BufReader::new(stdout).lines();
-		let mut stderr_reader = tokio::io::BufReader::new(stderr).lines();
+		let mut stdout_lines = tokio::io::BufReader::new(stdout).lines();
+		let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
+		let mut cancelled = ctx.cancelled.clone();
+		let start = Instant::now();
 
 		loop {
 			tokio::select! {
-				line = stdout_reader.next_line() => {
-					if let Some(_done) = handle_line(line, &mut child, start_time, "stdout")
-						.map_err(|e| TaskError::Failed(e.to_string()))?
-					{
-						return Ok(());
-					}
-				}
-				line = stderr_reader.next_line() => {
-					if let Some(_done) = handle_line(line, &mut child, start_time, "stderr")
-						.map_err(|e| TaskError::Failed(e.to_string()))?
-					{
-						return Ok(());
-					}
-				}
-				_ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-					if let Some(status) = child.try_wait().map_err(|e| TaskError::Failed(e.to_string()))? {
-						if !status.success() {
-							return Err(TaskError::Failed(format!("Game exited with status: {:?}", status.code())));
+				line = stdout_lines.next_line() => {
+					if let Ok(Some(log)) = line {
+						if is_game_initialized(&log) {
+							tracing::info!("game initialized");
+							return Ok(());
 						}
-						tracing::info!("game process exited, task completed");
+					}
+				}
+				line = stderr_lines.next_line() => {
+					if let Ok(Some(log)) = line {
+						if is_game_initialized(&log) {
+							tracing::info!("game initialized");
+							return Ok(());
+						}
+					}
+				}
+				_ = tokio::time::sleep(Duration::from_millis(100)) => {
+					if let Ok(Some(status)) = child.try_wait() {
+						if !status.success() {
+							return Err(TaskError::Failed(format!("Game exited: {:?}", status.code())));
+						}
 						return Ok(());
 					}
-
-					if start_time.elapsed() > MAX_WAIT_TIME {
-						tracing::warn!("timeout waiting for game initialization, assuming it started");
+					if start.elapsed() > MAX_WAIT_TIME {
+						tracing::warn!("timeout, assuming game started");
 						return Ok(());
 					}
 				}
@@ -322,47 +284,6 @@ impl SubTask for LaunchAndWaitTask {
 }
 
 fn is_game_initialized(log: &str) -> bool {
-	let lower = log.to_lowercase();
-	lower.contains("lwjgl version")
-		|| lower.contains("lwjgl openal")
-		|| lower.contains("openal initialized")
-		|| lower.contains("starting up soundsystem")
-		|| lower.contains("setting user:")
-}
-
-fn handle_line(
-	line: std::io::Result<Option<String>>,
-	child: &mut Child,
-	start_time: Instant,
-	label: &str,
-) -> Result<Option<()>> {
-	match line {
-		Ok(Some(log)) if is_game_initialized(&log) => {
-			tracing::info!("game initialized (detected from {label}), task completed");
-			Ok(Some(()))
-		}
-		Ok(Some(_)) => Ok(None),
-		Ok(None) => {
-			if let Some(status) = child.try_wait()? {
-				if !status.success() {
-					return Err(anyhow!("Game exited with status: {:?}", status.code()));
-				}
-				tracing::info!("game process exited ({label} closed), task completed");
-				return Ok(Some(()));
-			}
-
-			if start_time.elapsed() > MAX_WAIT_TIME {
-				tracing::warn!(
-					"timeout waiting for game initialization ({label} closed), assuming it started"
-				);
-				return Ok(Some(()));
-			}
-
-			Ok(None)
-		}
-		Err(err) => {
-			tracing::warn!("read {label} failed: {:?}", err);
-			Ok(None)
-		}
-	}
+	let l = log.to_lowercase();
+	l.contains("lwjgl version") || l.contains("openal initialized") || l.contains("setting user:")
 }

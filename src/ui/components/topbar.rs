@@ -4,7 +4,7 @@ use gpui_router::NavLink;
 pub struct Topbar;
 
 impl Topbar {
-	pub fn new(_state: std::sync::Arc<crate::core::state::AppState>) -> Self {
+	pub fn new() -> Self {
 		Self
 	}
 }

@@ -1,63 +1,50 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LauncherConfig {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub theme: Option<String>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub window_width: Option<u32>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub window_height: Option<u32>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub game: Option<GameDefaults>,
+	pub theme: String,
+	pub language: String,
+	pub cluster_path: Option<PathBuf>,
+	pub window_width: u32,
+	pub window_height: u32,
+	pub download_concurrency: u8,
+	pub game: GameDefaults,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GameDefaults {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub ram_type: Option<u8>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub ram_custom: Option<u32>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub jvm_args: Option<String>,
+	pub java_path: Option<PathBuf>,
+	pub max_memory_mb: u32,
+	pub window_width: u32,
+	pub window_height: u32,
+	pub jvm_args: String,
 }
 
-impl GameDefaults {
-	pub fn merge(&mut self, other: &Self) {
-		other.ram_type.map(|v| self.ram_type = Some(v));
-		other.ram_custom.map(|v| self.ram_custom = Some(v));
-		other
-			.jvm_args
-			.as_ref()
-			.map(|v| self.jvm_args = Some(v.clone()));
-	}
-}
-
-impl LauncherConfig {
-	pub fn default() -> Self {
+impl Default for LauncherConfig {
+	fn default() -> Self {
 		Self {
-			theme: Some("default".to_string()),
-			window_width: Some(900),
-			window_height: Some(550),
-			game: Some(GameDefaults {
-				ram_type: Some(0),
-				ram_custom: Some(15),
-				jvm_args: None,
-			}),
+			theme: "dark".into(),
+			language: "zh-CN".into(),
+			cluster_path: None,
+			window_width: 900,
+			window_height: 550,
+			download_concurrency: 5,
+			game: GameDefaults::default(),
 		}
 	}
+}
 
-	pub fn merge(&mut self, other: &Self) {
-		other.theme.as_ref().map(|v| self.theme = Some(v.clone()));
-		other.window_width.map(|v| self.window_width = Some(v));
-		other.window_height.map(|v| self.window_height = Some(v));
-		other.game.as_ref().map(|g| {
-			self.game.get_or_insert_with(GameDefaults::default).merge(g);
-		});
+impl Default for GameDefaults {
+	fn default() -> Self {
+		Self {
+			java_path: None,
+			max_memory_mb: 4096,
+			window_width: 854,
+			window_height: 480,
+			jvm_args: String::new(),
+		}
 	}
 }

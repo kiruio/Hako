@@ -1,7 +1,6 @@
 use crate::task::error::TaskError;
-use crate::task::priority::Priority;
 use std::sync::Arc;
-use tokio::sync::{Notify, oneshot};
+use tokio::sync::{Notify, oneshot, watch};
 use uuid::Uuid;
 
 pub type TaskId = Uuid;
@@ -17,38 +16,35 @@ pub enum TaskState {
 
 pub struct TaskHandle<T> {
 	pub id: TaskId,
-	pub priority: Priority,
 	state: Arc<tokio::sync::RwLock<TaskState>>,
-	cancel_tx: Arc<tokio::sync::watch::Sender<bool>>,
+	cancel_tx: Arc<watch::Sender<bool>>,
 	completion: Arc<Notify>,
-	result_rx: oneshot::Receiver<Result<T, TaskError>>,
+	result_rx: Option<oneshot::Receiver<Result<T, TaskError>>>,
 }
 
 impl<T> TaskHandle<T> {
 	pub fn new(
 		id: TaskId,
-		priority: Priority,
 		state: Arc<tokio::sync::RwLock<TaskState>>,
-		cancel_tx: Arc<tokio::sync::watch::Sender<bool>>,
+		cancel_tx: Arc<watch::Sender<bool>>,
 		completion: Arc<Notify>,
 		result_rx: oneshot::Receiver<Result<T, TaskError>>,
 	) -> Self {
 		Self {
 			id,
-			priority,
 			state,
 			cancel_tx,
 			completion,
-			result_rx,
+			result_rx: Some(result_rx),
 		}
 	}
 
-	pub fn cancel_token(&self) -> Arc<tokio::sync::watch::Sender<bool>> {
-		self.cancel_tx.clone()
+	pub fn cancel_token(&self) -> Arc<watch::Sender<bool>> {
+		Arc::clone(&self.cancel_tx)
 	}
 
 	pub fn completion_notifier(&self) -> Arc<Notify> {
-		self.completion.clone()
+		Arc::clone(&self.completion)
 	}
 
 	pub async fn state(&self) -> TaskState {
@@ -69,9 +65,11 @@ impl<T> TaskHandle<T> {
 		}
 	}
 
-	pub async fn result(self) -> Result<T, TaskError> {
+	pub async fn result(&mut self) -> Result<T, TaskError> {
 		self.result_rx
+			.take()
+			.ok_or_else(|| TaskError::Failed("Result already consumed".into()))?
 			.await
-			.map_err(|_| TaskError::Failed("Channel closed".to_string()))?
+			.map_err(|_| TaskError::Failed("Channel closed".into()))?
 	}
 }

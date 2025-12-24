@@ -1,14 +1,14 @@
 use crate::core::state::AppState;
 use gpui::{div, prelude::*, rgb};
-use std::sync::Arc;
 
 pub struct InstancesView;
 
 impl InstancesView {
-	pub fn render(state: Arc<AppState>) -> impl IntoElement {
-		let instances = state.instances.lock().unwrap().clone();
+	pub fn render() -> impl IntoElement {
+		let state = AppState::get();
+		let instances = state.instances.read().unwrap().clone();
 		let current_idx = *state.current_instance.lock().unwrap();
-		let cluster_path = state.cluster_path.lock().unwrap().clone();
+		let cluster_path = state.cluster_path();
 
 		div()
 			.flex()
@@ -56,7 +56,6 @@ impl InstancesView {
 						let is_sel = current_idx == Some(idx);
 						let ver = inst.version.clone();
 						let path = inst.version_path.display().to_string();
-						let st = state.clone();
 
 						div()
 							.flex()
@@ -71,7 +70,7 @@ impl InstancesView {
 							.hover(|s| s.bg(rgb(0x252525)))
 							.cursor_pointer()
 							.on_mouse_down(gpui::MouseButton::Left, move |_, _, _| {
-								st.select_instance(Some(idx));
+								AppState::get().select_instance(Some(idx));
 							})
 							.child(
 								div()
