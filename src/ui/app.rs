@@ -40,22 +40,26 @@ impl Render for HakoApp {
 					.child(
 						Routes::new()
 							.basename("/")
-							.child(Route::new().index().element(HomeView::render()))
+							.child(Route::new().index().element(|_, _| HomeView::render()))
 							.child(
 								Route::new()
 									.path("download")
-									.element(DownloadView::render()),
+									.element(|_, _| DownloadView::render()),
 							)
 							.child(
 								Route::new()
 									.path("instances")
-									.element(InstancesView::render()),
+									.element(|_, _| InstancesView::render()),
 							)
-							.child(Route::new().path("tasks").element(TasksView::render()))
+							.child(
+								Route::new()
+									.path("tasks")
+									.element(|_, _| TasksView::render()),
+							)
 							.child(
 								Route::new()
 									.path("settings")
-									.element(SettingsView::render()),
+									.element(|_, _| SettingsView::render()),
 							),
 					),
 			)
